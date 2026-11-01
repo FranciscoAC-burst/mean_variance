@@ -49,7 +49,7 @@ mean_variance/
 ├── main.ipynb             # runs everything and writes output/
 ├── output/
 │   ├── tables/            # performance.csv, monthly_returns.csv
-│   └── figures/           # wealth and efficient frontier charts
+│   └── figures/           # wealth and efficient frontier charts, performance table
 └── LICENSE
 ```
 

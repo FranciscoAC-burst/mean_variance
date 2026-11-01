@@ -19,6 +19,23 @@ HALO = [patheffects.withStroke(linewidth=3, foreground=SURFACE)]
 OUTLINE = [patheffects.withStroke(linewidth=1.5, foreground=INK_SECONDARY)]
 
 FAMILIES = {"MinVar": "Minimum variance", "Optimal": "Optimal portfolio"}
+BENCHMARKS = {"1/N": "Equal weight (1/N)", "Market": "CRSP market"}
+TABLE_COLUMNS = {  # column: (header, format)
+    "CAGR": ("CAGR", "{:.1%}"),
+    "Volatility": ("Volatility", "{:.1%}"),
+    "Sharpe": ("Sharpe\nratio", "{:.2f}"),
+    "Max drawdown": ("Max\ndrawdown", "{:.1%}"),
+    "Alpha": ("CAPM\nalpha", "{:.1%}"),
+    "Alpha p-value": ("Alpha\np-value", "{:.3f}"),
+    "Beta": ("Beta", "{:.2f}"),
+}
+
+
+def _display_name(name):
+    if name in BENCHMARKS:
+        return BENCHMARKS[name]
+    family, lookback = name.split()
+    return f"{FAMILIES[family]} {lookback}"
 
 
 def _style(ax):
@@ -175,6 +192,46 @@ def plot_frontier(daily, monthly, rf, rebalance_dates, lookback=10, n_labels=20,
     _place_labels(ax, np.column_stack([vol_i, ret_i])[chosen], np.array(daily.columns)[chosen],
                   sc.cmap(sc.norm(sharpe_i[chosen])), avoid, taken)
 
+    if path:
+        fig.savefig(path, dpi=200)
+    return fig
+
+
+def plot_performance_table(performance, period, significance=0.05, path=None):
+    """Performance table as a figure, grouped by strategy family.
+    Alphas significant at the `significance` level are shown in bold."""
+    n = len(performance)
+    fig, ax = plt.subplots(figsize=(10, 0.38 * n + 1.5))
+    fig.set_facecolor(SURFACE)
+    ax.set_axis_off()
+    ax.set_xlim(0, 1)
+    ax.set_ylim(n + 0.6, -0.9)
+
+    x_values = np.linspace(0.36, 0.985, len(TABLE_COLUMNS))
+    for x, (header, _) in zip(x_values, TABLE_COLUMNS.values()):
+        ax.text(x, 0, header, ha="right", va="center", fontsize=10, color=INK_SECONDARY, fontweight="bold")
+    ax.text(0.01, 0, "Strategy", ha="left", va="center", fontsize=10, color=INK_SECONDARY, fontweight="bold")
+    ax.axhline(0.6, color=AXIS, lw=1)
+
+    groups = [name.split()[0] if name not in BENCHMARKS else "Benchmark" for name in performance.index]
+    for i, (name, row) in enumerate(performance.iterrows(), start=1):
+        if i > 1 and groups[i - 1] != groups[i - 2]:
+            ax.axhline(i - 0.5, color=GRID, lw=0.8)
+        ax.text(0.01, i, _display_name(name), ha="left", va="center", fontsize=10, color=INK)
+        significant = row["Alpha p-value"] < significance
+        for x, (column, (_, fmt)) in zip(x_values, TABLE_COLUMNS.items()):
+            value = row[column]
+            text = "–" if pd.isna(row["Alpha p-value"]) and column.startswith("Alpha") else fmt.format(value)
+            bold = column == "Alpha" and significant
+            ax.text(x, i, text, ha="right", va="center", fontsize=10, color=INK,
+                    fontweight="bold" if bold else "normal")
+    ax.axhline(n + 0.5, color=AXIS, lw=1)
+
+    ax.set_title(f"Performance, {period}", fontsize=12, color=INK)
+    fig.text(0.5, 0.02, "Monthly returns. Sharpe ratio over the 1-month T-bill. Alpha and beta from an OLS CAPM "
+             f"regression on the CRSP market. Bold: alpha significant at the {significance:.0%} level.",
+             ha="center", fontsize=8, color=INK_SECONDARY)
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
     if path:
         fig.savefig(path, dpi=200)
     return fig
